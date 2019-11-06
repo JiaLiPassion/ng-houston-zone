@@ -1,0 +1,130 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Zone.js Basic Demo</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="./node_modules/zone.js/dist/zone.js"></script>
+  <script src="./node_modules/zone.js/dist/zone-error.js"></script>
+  <script src="./node_modules/zone.js/dist/long-stack-trace-zone.js"></script>
+</head>
+<body>
+
+  <h1>User Actions Example</h1>
+
+  <button id="b1">View Order</button>
+  <button id="b2">Place Order</button>
+  <button id="b3">Error</button>
+
+  <div id="tracking"></div>
+
+  <script>
+
+  /*
+   * This is a simple example of async stack traces with zones
+   */
+
+  let viewUrl = 'https://jsonplaceholder.typicode.com/users';
+  let additionalUrl = 'https://jsonplaceholder.typicode.com/posts';
+  let orderUrl = 'https://jsonplaceholder.typicode.com/comments';
+  let transactionUrl = 'https://jsonplaceholder.typicode.com/photos';
+
+  function httpRequestUrl(url) {
+    function reqListener () {
+      console.log(this.responseText);
+    }
+
+    const oReq = new XMLHttpRequest();
+    oReq.addEventListener("load", reqListener);
+    oReq.open("GET", url);
+    oReq.send();
+  }
+
+  const tasks = [];
+  let currentButtonTasks = {};
+  function updateTaskStatus() {
+    tracking.innerHTML = '';
+    tasks.forEach(t => {
+      tracking.innerHTML += t;
+      tracking.innerHTML += '<br/>';
+    });
+  }
+
+  function main () {
+    b1.addEventListener('click', viewBtnClicked);
+    b2.addEventListener('click', orderBtnClicked);
+    b3.addEventListener('click', errorBtnClicked);
+  }
+
+  function viewBtnClicked() {
+    httpRequestUrl(viewUrl);
+    httpRequestUrl(additionalUrl);
+  }
+
+  function orderBtnClicked() {
+    httpRequestUrl(orderUrl);
+    httpRequestUrl(transactionUrl);
+  }
+
+  function errorBtnClicked() {
+    setTimeout(() => {
+      throw new Error('test');
+    }, 100);
+  }
+
+
+  /*
+   * Bootstrap the app
+   */
+  // main();
+  let tracePerformance = true;
+  let longStackTrace = true;
+  let zone = Zone.current;
+  if (longStackTrace) {
+    zone = Zone.current.fork(Zone.longStackTraceZoneSpec);
+  }
+  zone.fork({
+    name: 'userActionTracking',
+    onScheduleTask: function(delegate, curr, target, task) {
+      if (task.source === 'XMLHttpRequest.send') {
+        tasks.push(`http request is sent: ${task.data.url}`);
+        updateTaskStatus();
+        if (tracePerformance) {
+          currentButtonTasks[task.data.url] = Date.now();
+        }
+      }
+      return delegate.scheduleTask(target, task);
+    },
+    onInvokeTask: function(delegate, curr, target, task, applyThis, applyArgs) {
+      if (task.type === 'eventTask' && task.target.nodeName === 'BUTTON') {
+        tasks.push(`-------------------------------------`);
+        tasks.push(`button is clicked: ${task.target.id}`);
+        currentButtonTasks = {};
+        updateTaskStatus();
+      } else if (task.type === 'eventTask' && task.eventName === 'load') {
+        let duration = '';
+        const start = currentButtonTasks[task.target.responseURL];
+        if (start) {
+          duration = (Date.now() - start) / 1000;
+          currentButtonTasks[task.target.responseURL] = null;
+          tasks.push(`http request getting response: ${task.target.responseURL}, cost ${duration} ms`);
+        } else {
+          tasks.push(`http request getting response: ${task.target.responseURL}`);
+        }
+        updateTaskStatus();
+      }
+      const r = delegate.invokeTask(target, task, applyThis, applyArgs);
+      updateTaskStatus();
+      return r;
+    },
+    onHandleError: function(delegate, curr, target, error) {
+      delegate.handleError(target, error);
+      tasks.push(`error occurs: ${error.stack}`);
+      updateTaskStatus();
+      return true;
+    }
+  }).run(main);
+
+  </script>
+</body>
+</html>

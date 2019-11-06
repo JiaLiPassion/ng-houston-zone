@@ -1,0 +1,84 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Zone.js Basic Demo</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script src="./node_modules/zone.js/dist/zone.js"></script>
+</head>
+<body>
+
+  <h1>User Actions Example</h1>
+
+  <button id="b1">Http</button>
+  <button id="b2">Timeout</button>
+  <button id="b3">Add</button>
+
+  <div id="tracking"></div>
+
+  <script>
+
+  /*
+   * This is a simple example of async stack traces with zones
+   */
+
+  let viewUrl = 'https://jsonplaceholder.typicode.com/users';
+
+  function httpRequestUrl(url) {
+    function reqListener () {
+      console.log(this.responseText);
+      data.http = 'http get data';
+    }
+
+    const oReq = new XMLHttpRequest();
+    oReq.addEventListener("load", reqListener);
+    oReq.open("GET", url);
+    oReq.send();
+  }
+
+  const data = {};
+
+  function updateTaskStatus() {
+    tracking.innerHTML = JSON.stringify(data);
+  }
+
+  function main () {
+    b1.addEventListener('click', httpBtnClicked);
+    b2.addEventListener('click', timeoutBtnClicked);
+    b3.addEventListener('click', addBtnClicked);
+  }
+
+  function httpBtnClicked() {
+    httpRequestUrl(viewUrl);
+  }
+
+  function timeoutBtnClicked() {
+    setTimeout(() => {
+      data.timeout = 'timeout';
+    });
+  }
+
+  function addBtnClicked() {
+    if (!data.num) {
+      data.num = 0;
+    }
+    data.num ++;
+  }
+
+
+  /*
+   * Bootstrap the app
+   */
+  // main();
+  Zone.current.fork({
+    name: 'autoRendering',
+    onInvokeTask: function(delegate, curr, target, task, applyThis, applyArgs) {
+      const r = delegate.invokeTask(target, task, applyThis, applyArgs);
+      updateTaskStatus();
+      return r;
+    },
+  }).run(main);
+
+  </script>
+</body>
+</html>
