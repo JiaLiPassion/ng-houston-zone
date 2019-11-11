@@ -42,6 +42,7 @@
 
   const tasks = [];
   let currentButtonTasks = {};
+  let currentButtonId;
   function updateTaskStatus() {
     tracking.innerHTML = '';
     tasks.forEach(t => {
@@ -100,6 +101,8 @@
         tasks.push(`-------------------------------------`);
         tasks.push(`button is clicked: ${task.target.id}`);
         currentButtonTasks = {};
+        currentButtonTasks[task.target.id] = 0;
+        currentButtonId = task.target.id;
         updateTaskStatus();
       } else if (task.type === 'eventTask' && task.eventName === 'load') {
         let duration = '';
@@ -107,6 +110,9 @@
         if (start) {
           duration = (Date.now() - start) / 1000;
           currentButtonTasks[task.target.responseURL] = null;
+          if (currentButtonId) {
+            currentButtonTasks[currentButtonId] += duration;
+          }
           tasks.push(`http request getting response: ${task.target.responseURL}, cost ${duration} ms`);
         } else {
           tasks.push(`http request getting response: ${task.target.responseURL}`);
@@ -122,6 +128,13 @@
       tasks.push(`error occurs: ${error.stack}`);
       updateTaskStatus();
       return true;
+    },
+    onHasTask: function(delegate, curr, target, hasTask) {
+      if (!hasTask.macroTask && currentButtonId) {
+          tasks.push(` button ${currentButtonId} click cost cost ${currentButtonTasks[currentButtonId]} ms`);
+          updateTaskStatus();
+      }
+      return delegate.hasTask(target, hasTask);
     }
   }).run(main);
 
